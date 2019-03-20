@@ -6,6 +6,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.graphx.*;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.sources.In;
 import org.apache.spark.storage.StorageLevel;
 import scala.Tuple2;
 import scala.collection.Iterator;
@@ -26,25 +27,39 @@ public class Exercise_2 {
     private static class VProg extends AbstractFunction3<Long,Integer,Integer,Integer> implements Serializable {
         @Override
         public Integer apply(Long vertexID, Integer vertexValue, Integer message) {
-            return null;
+            if (message == Integer.MAX_VALUE || message < 0) {             // superstep 0
+                return vertexValue;
+            } else {                                        // superstep > 0
+                return Math.min(message, vertexValue);
+            }
         }
     }
 
     private static class sendMsg extends AbstractFunction1<EdgeTriplet<Integer,Integer>, Iterator<Tuple2<Object,Integer>>> implements Serializable {
         @Override
         public Iterator<Tuple2<Object, Integer>> apply(EdgeTriplet<Integer, Integer> triplet) {
-            return null;
+            Tuple2<Object,Integer> sourceVertex = triplet.toTuple()._1();
+            Tuple2<Object,Integer> dstVertex = triplet.toTuple()._2();
+            Integer distance = triplet.toTuple()._3();
+            Integer newDstVertex = sourceVertex._2 + distance;
+            if (newDstVertex >= dstVertex._2) {
+                // do nothing
+                return JavaConverters.asScalaIteratorConverter(new ArrayList<Tuple2<Object,Integer>>().iterator()).asScala();
+            } else {
+                // propagate source vertex value
+                return JavaConverters.asScalaIteratorConverter(Arrays.asList(new Tuple2<Object,Integer>(triplet.dstId(),newDstVertex)).iterator()).asScala();
+            }
         }
     }
 
     private static class merge extends AbstractFunction2<Integer,Integer,Integer> implements Serializable {
         @Override
         public Integer apply(Integer o, Integer o2) {
-            return null;
+            return Math.max(o,o2);
         }
     }
 
-	public static void shortestPaths(JavaSparkContext ctx) {
+    public static void shortestPaths(JavaSparkContext ctx) {
         Map<Long, String> labels = ImmutableMap.<Long, String>builder()
                 .put(1l, "A")
                 .put(2l, "B")
@@ -87,12 +102,12 @@ public class Exercise_2 {
                 new sendMsg(),
                 new merge(),
                 ClassTag$.MODULE$.apply(Integer.class))
-            .vertices()
-            .toJavaRDD()
-            .foreach(v -> {
-                Tuple2<Object,Integer> vertex = (Tuple2<Object,Integer>)v;
-                System.out.println("Minimum cost to get from "+labels.get(1l)+" to "+labels.get(vertex._1)+" is "+vertex._2);
-            });
-	}
-	
+                .vertices()
+                .toJavaRDD()
+                .foreach(v -> {
+                    Tuple2<Object,Integer> vertex = (Tuple2<Object,Integer>)v;
+                    System.out.println("Minimum cost to get from "+labels.get(1l)+" to "+labels.get(vertex._1)+" is "+vertex._2);
+                });
+    }
+
 }
