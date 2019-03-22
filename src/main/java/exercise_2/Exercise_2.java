@@ -91,7 +91,7 @@ public class Exercise_2 {
             Tuple2<Object, Integer> dstVertex = triplet.toTuple()._2();
             Integer distance = triplet.toTuple()._3();
             Integer newDstVertex = sourceVertex._2 + distance;
-            if (newDstVertex >= dstVertex._2) {
+            if (sourceVertex._2 == Integer.MAX_VALUE || newDstVertex >= dstVertex._2) {
                 // do nothing
                 return JavaConverters.asScalaIteratorConverter(new ArrayList<Tuple2<Object, Integer>>().iterator()).asScala();
             } else {
@@ -104,7 +104,7 @@ public class Exercise_2 {
     private static class merge extends AbstractFunction2<Integer, Integer, Integer> implements Serializable {
         @Override
         public Integer apply(Integer o, Integer o2) {
-            return Math.max(o, o2);
+            return Math.min(o, o2);
         }
     }
 

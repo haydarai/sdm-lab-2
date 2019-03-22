@@ -100,7 +100,7 @@ public class Exercise_3 {
             Tuple2<Object, Payload> sourceVertex = triplet.toTuple()._1();
             Tuple2<Object, Payload> dstVertex = triplet.toTuple()._2();
             Integer distance = triplet.toTuple()._3();
-            if (sourceVertex._2.getValue() + distance >= dstVertex._2.getValue()) {
+            if (sourceVertex._2.getValue() == Integer.MAX_VALUE || sourceVertex._2.getValue() + distance >= dstVertex._2.getValue()) {
                 // do nothing
                 return JavaConverters.asScalaIteratorConverter(new ArrayList<Tuple2<Object, Payload>>().iterator()).asScala();
             } else {
@@ -115,7 +115,7 @@ public class Exercise_3 {
     private static class merge extends AbstractFunction2<Payload, Payload, Payload> implements Serializable {
         @Override
         public Payload apply(Payload o, Payload o2) {
-            if (o.getValue() > o2.getValue()) {
+            if (o.getValue() < o2.getValue()) {
                 return o;
             } else {
                 return o2;
