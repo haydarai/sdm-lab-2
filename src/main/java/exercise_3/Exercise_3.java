@@ -59,12 +59,11 @@ public class Exercise_3 {
     private static class merge extends AbstractFunction2<Payload,Payload,Payload> implements Serializable {
         @Override
         public Payload apply(Payload o, Payload o2) {
-            Payload newVertex = new Payload(Math.min(o.getValue(),o2.getValue()));
-            List<Long> newPath;
-            if(o.getValue()<o2.getValue()) newPath = o.getVertices();
-            else newPath = o2.getVertices();
-            newVertex.setVertices(newPath);
-            return newVertex;
+            if (o.getValue() <= o2.getValue()) {
+                return o;
+            } else {
+                return o2;
+            }
         }
     }
     public static void shortestPathsExt(JavaSparkContext ctx) {
