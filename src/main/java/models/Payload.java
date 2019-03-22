@@ -6,14 +6,14 @@ import java.util.List;
 
 public class Payload implements Serializable {
     private Integer value;
-    private List<Object> vertices;
+    private List<Long> vertices;
 
     public Payload(Integer value) {
         this.value = value;
         this.vertices = new ArrayList<>();
     }
 
-    public Payload(Integer value, List<Object> vertices) {
+    public Payload(Integer value, List<Long> vertices) {
         this.value = value;
         this.vertices = vertices;
     }
@@ -26,15 +26,15 @@ public class Payload implements Serializable {
         this.value = value;
     }
 
-    public List<Object> getVertices() {
+    public List<Long> getVertices() {
         return vertices;
     }
 
-    public void setVertices(List<Object> vertices) {
+    public void setVertices(List<Long> vertices) {
         this.vertices = vertices;
     }
 
-    public List<Object> addVertex(Object vertex) {
+    public List<Long> addVertex(Long vertex) {
         this.vertices.add(vertex);
         return this.vertices;
     }

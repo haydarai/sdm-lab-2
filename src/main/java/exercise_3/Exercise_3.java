@@ -2,7 +2,7 @@ package exercise_3;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
-import exercise_2.Exercise_2;
+import models.Payload;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.graphx.*;
@@ -23,41 +23,50 @@ import java.util.Map;
 
 public class Exercise_3 {
 
-    private static class VProg extends AbstractFunction3<Long,Integer,Integer,Integer> implements Serializable {
+    private static class VProg extends AbstractFunction3<Long, Payload,Payload,Payload> implements Serializable {
         @Override
-        public Integer apply(Long vertexID, Integer vertexValue, Integer message) {
-            if (message == Integer.MAX_VALUE || message < 0) {             // superstep 0
+        public Payload apply(Long vertexID, Payload vertexValue, Payload message) {
+            if (message.getValue() == Integer.MAX_VALUE || message.getValue() < 0) { // superstep 0
                 return vertexValue;
-            } else {                                        // superstep > 0
-                return Math.min(message, vertexValue);
+            } else if (message.getValue() <= vertexValue.getValue()) { // superstep > 0
+                return message;
+            } else {
+                return vertexValue;
             }
         }
     }
 
-    private static class sendMsg extends AbstractFunction1<EdgeTriplet<Integer,Integer>, Iterator<Tuple2<Object,Integer>>> implements Serializable {
+    private static class sendMsg extends AbstractFunction1<EdgeTriplet<Payload,Integer>, Iterator<Tuple2<Object,Payload>>> implements Serializable {
         @Override
-        public Iterator<Tuple2<Object, Integer>> apply(EdgeTriplet<Integer, Integer> triplet) {
-            Tuple2<Object,Integer> sourceVertex = triplet.toTuple()._1();
-            Tuple2<Object,Integer> dstVertex = triplet.toTuple()._2();
-            Integer distance = triplet.toTuple()._3();
-            Integer newDstVertex = sourceVertex._2 + distance;
-            if (newDstVertex >= dstVertex._2) {
+        public Iterator<Tuple2<Object, Payload>> apply(EdgeTriplet<Payload, Integer> triplet) {
+            Integer val = triplet.attr();
+            Tuple2<Object,Payload> sourceVertex = triplet.toTuple()._1();
+            Tuple2<Object,Payload> dstVertex = triplet.toTuple()._2();
+
+            if (sourceVertex._2.getValue()==Integer.MAX_VALUE || (sourceVertex._2.getValue()+val >= dstVertex._2.getValue())) {   // source vertex value is smaller than dst vertex?
                 // do nothing
-                return JavaConverters.asScalaIteratorConverter(new ArrayList<Tuple2<Object,Integer>>().iterator()).asScala();
+                return JavaConverters.asScalaIteratorConverter(new ArrayList<Tuple2<Object,Payload>>().iterator()).asScala();
             } else {
                 // propagate source vertex value
-                return JavaConverters.asScalaIteratorConverter(Arrays.asList(new Tuple2<Object,Integer>(triplet.dstId(),newDstVertex)).iterator()).asScala();
+                Payload newInfo = new Payload(sourceVertex._2.getValue()+val);
+                newInfo.setVertices(sourceVertex._2.getVertices());
+                newInfo.addVertex((Long)dstVertex._1);
+                return JavaConverters.asScalaIteratorConverter(Arrays.asList(new Tuple2<Object,Payload>(triplet.dstId(),newInfo)).iterator()).asScala();
             }
         }
     }
 
-    private static class merge extends AbstractFunction2<Integer,Integer,Integer> implements Serializable {
+    private static class merge extends AbstractFunction2<Payload,Payload,Payload> implements Serializable {
         @Override
-        public Integer apply(Integer o, Integer o2) {
-            return Math.max(o,o2);
+        public Payload apply(Payload o, Payload o2) {
+            Payload newVertex = new Payload(Math.min(o.getValue(),o2.getValue()));
+            List<Long> newPath;
+            if(o.getValue()<o2.getValue()) newPath = o.getVertices();
+            else newPath = o2.getVertices();
+            newVertex.setVertices(newPath);
+            return newVertex;
         }
     }
-
     public static void shortestPathsExt(JavaSparkContext ctx) {
         Map<Long, String> labels = ImmutableMap.<Long, String>builder()
                 .put(1l, "A")
@@ -67,14 +76,15 @@ public class Exercise_3 {
                 .put(5l, "E")
                 .put(6l, "F")
                 .build();
-
-        List<Tuple2<Object,Integer>> vertices = Lists.newArrayList(
-                new Tuple2<Object,Integer>(1l,0),
-                new Tuple2<Object,Integer>(2l,Integer.MAX_VALUE),
-                new Tuple2<Object,Integer>(3l,Integer.MAX_VALUE),
-                new Tuple2<Object,Integer>(4l,Integer.MAX_VALUE),
-                new Tuple2<Object,Integer>(5l,Integer.MAX_VALUE),
-                new Tuple2<Object,Integer>(6l,Integer.MAX_VALUE)
+        ArrayList<Long> initialPath = new ArrayList<>();
+        initialPath.add(1l);
+        List<Tuple2<Object,Payload>> vertices = Lists.newArrayList(
+                new Tuple2<Object,Payload>(1l,new Payload(0,initialPath)),
+                new Tuple2<Object,Payload>(2l,new Payload(Integer.MAX_VALUE)),
+                new Tuple2<Object,Payload>(3l,new Payload(Integer.MAX_VALUE)),
+                new Tuple2<Object,Payload>(4l,new Payload(Integer.MAX_VALUE)),
+                new Tuple2<Object,Payload>(5l,new Payload(Integer.MAX_VALUE)),
+                new Tuple2<Object,Payload>(6l,new Payload(Integer.MAX_VALUE))
         );
         List<Edge<Integer>> edges = Lists.newArrayList(
                 new Edge<Integer>(1l,2l, 4), // A --> B (4)
@@ -86,26 +96,34 @@ public class Exercise_3 {
                 new Edge<Integer>(4l, 6l, 11) // D --> F (11)
         );
 
-        JavaRDD<Tuple2<Object,Integer>> verticesRDD = ctx.parallelize(vertices);
+        JavaRDD<Tuple2<Object,Payload>> verticesRDD = ctx.parallelize(vertices);
         JavaRDD<Edge<Integer>> edgesRDD = ctx.parallelize(edges);
 
-        Graph<Integer,Integer> G = Graph.apply(verticesRDD.rdd(),edgesRDD.rdd(),1, StorageLevel.MEMORY_ONLY(), StorageLevel.MEMORY_ONLY(),
-                scala.reflect.ClassTag$.MODULE$.apply(Integer.class),scala.reflect.ClassTag$.MODULE$.apply(Integer.class));
+        Graph<Payload, Integer> G = Graph.apply(verticesRDD.rdd(),edgesRDD.rdd(),null, StorageLevel.MEMORY_ONLY(), StorageLevel.MEMORY_ONLY(),
+                scala.reflect.ClassTag$.MODULE$.apply(Payload.class),scala.reflect.ClassTag$.MODULE$.apply(Integer.class));
 
-        GraphOps ops = new GraphOps(G, scala.reflect.ClassTag$.MODULE$.apply(Integer.class),scala.reflect.ClassTag$.MODULE$.apply(Integer.class));
+        GraphOps ops = new GraphOps(G, scala.reflect.ClassTag$.MODULE$.apply(Payload.class),scala.reflect.ClassTag$.MODULE$.apply(Integer.class));
 
-        ops.pregel(Integer.MAX_VALUE,
+        ops.pregel(new Payload(Integer.MAX_VALUE),
                 Integer.MAX_VALUE,
                 EdgeDirection.Out(),
-                new Exercise_3.VProg(),
-                new Exercise_3.sendMsg(),
-                new Exercise_3.merge(),
-                ClassTag$.MODULE$.apply(Integer.class))
+                new VProg(),
+                new sendMsg(),
+                new merge(),
+                ClassTag$.MODULE$.apply(Payload.class))
                 .vertices()
                 .toJavaRDD()
+                .sortBy(f -> ((Tuple2<Object, Integer>) f)._1, true, 0)
                 .foreach(v -> {
-                    Tuple2<Object,Integer> vertex = (Tuple2<Object,Integer>)v;
-                    System.out.println("Minimum cost to get from "+labels.get(1l)+" to "+labels.get(vertex._1)+" is "+vertex._2);
+                    Tuple2<Object,Payload> vertex = (Tuple2<Object,Payload>)v;
+                    System.out.print("Minimum path to get from "+labels.get(1l)+" to "+labels.get(vertex._1)+" is [");
+                    String path="";
+                    for(Object step : vertex._2.getVertices()){
+                        path+=labels.get(step)+",";
+                    }
+                    path = path.substring(0,path.length()-1);
+                    System.out.println(path+"]"+" with cost "+vertex._2.getValue());
                 });
     }
+
 }
