@@ -19,6 +19,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
+import static org.apache.spark.sql.functions.desc;
+
 
 public class Exercise_4 {
 
@@ -49,7 +51,7 @@ public class Exercise_4 {
             if (line.indexOf('\t') != -1) {
                 int index = line.indexOf("\t");
                 String id = line.substring(0, index);
-                String name = line.substring(index);
+                String name = line.substring(index + 1);
                 verticesList.add(RowFactory.create(id, name));
             }
         }
@@ -61,7 +63,7 @@ public class Exercise_4 {
             if (line.indexOf('\t') != -1) {
                 int index = line.indexOf("\t");
                 String idFrom = line.substring(0, index);
-                String idTo = line.substring(index);
+                String idTo = line.substring(index + 1);
                 edgesList.add(RowFactory.create(idFrom, idTo));
             }
         }
@@ -75,11 +77,25 @@ public class Exercise_4 {
 
         // Create graph
         GraphFrame gf = GraphFrame.apply(vertices, edges);
-        gf.edges().show();
-        gf.vertices().show();
+//        gf.edges().show();
+//        gf.vertices().show();
 
         // Apply pagerank
-        gf = gf.pageRank().resetProbability(0.5).maxIter(10).run();
-        gf.vertices().show();
+        for (double dampingFactor = 0.05; dampingFactor < 0.3; dampingFactor += 0.05) {
+            long start = System.currentTimeMillis();
+            GraphFrame prgf = gf.pageRank().resetProbability(dampingFactor).maxIter(10).run();
+            prgf.vertices().orderBy(desc("pagerank")).limit(10).show();
+            long end = System.currentTimeMillis();
+            System.out.print((end - start) / 1000);
+            System.out.println(" in seconds for dampingfactor = " + dampingFactor + " and iterations are 10.");
+        }
+        for (int maxIterations = 1; maxIterations <= 20; maxIterations += 2) {
+            long start = System.currentTimeMillis();
+            GraphFrame pggf = gf.pageRank().resetProbability(0.15).maxIter(maxIterations).run();
+            pggf.vertices().orderBy(desc("pagerank")).limit(10).show();
+            long end = System.currentTimeMillis();
+            System.out.print((end - start) / 1000);
+            System.out.println(" in seconds for dampingFactor is .15 and iterations is " + maxIterations);
+        }
     }
 }
